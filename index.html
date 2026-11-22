@@ -338,6 +338,7 @@ window.DriveLogic = {
   function startAlarm(type) {
     stopAlarm();
     if (muted) return;
+    startVoice(type);
     if (!alarmFallback) {
       var a = getAlarmAudio(type);
       var p = a.play();
@@ -349,8 +350,54 @@ window.DriveLogic = {
   }
 
   function stopAlarm() {
+    stopVoice();
     if (alarmTimer) { clearInterval(alarmTimer); alarmTimer = null; }
     for (var k in alarmAudio) { var a = alarmAudio[k]; a.pause(); a.currentTime = 0; }
+  }
+
+  /* ---- Voice warnings: speak the alert aloud (Web Speech API, built into the browser) ---- */
+  var voiceTimer = null;
+  var VOICE_TEXT = {
+    sleep: 'Wake up! You are sleeping! Stop the bus!',
+    smoke: 'Smoking detected! Put it out!'
+  };
+
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return null;
+    var vs = speechSynthesis.getVoices();
+    var pref = ['en-in', 'en-us', 'en-gb'];
+    for (var i = 0; i < pref.length; i++) {
+      for (var j = 0; j < vs.length; j++) {
+        if (vs[j].lang && vs[j].lang.toLowerCase().indexOf(pref[i]) === 0) return vs[j];
+      }
+    }
+    for (var k = 0; k < vs.length; k++) {
+      if (vs[k].lang && vs[k].lang.slice(0, 2).toLowerCase() === 'en') return vs[k];
+    }
+    return null;
+  }
+
+  function speakNow(type) {
+    if (!('speechSynthesis' in window) || muted) return;
+    var u = new SpeechSynthesisUtterance(VOICE_TEXT[type]);
+    u.rate = 1.1;
+    u.volume = 1;
+    var v = pickVoice();
+    if (v) u.voice = v;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+
+  function startVoice(type) {
+    stopVoice();
+    if (muted || !('speechSynthesis' in window)) return;
+    speakNow(type);
+    voiceTimer = setInterval(function () { if (!muted) speakNow(type); }, 5000);
+  }
+
+  function stopVoice() {
+    if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null; }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
   }
 
   /* ---- Detection loop ---- */
